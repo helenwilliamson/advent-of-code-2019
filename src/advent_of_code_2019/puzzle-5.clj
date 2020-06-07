@@ -9,10 +9,9 @@
                  (-> (slurp file-name)
                      (str/split #","))))))
 
-(defn continuing-instruction?
-  [[opcode]]
-  (println "checking" opcode)
-  (or (adder? opcode) (multipler? opcode) (input? opcode) (output? opcode)))
+(defn digit
+  [value position]
+  (nth (map #(Character/getNumericValue %1) (reverse (str value))) position 0))
 
 (defn immediate?
   [opcode position]
@@ -69,9 +68,23 @@
             :output (conj (:output computer) value)
             :pointer updated-pointer})))
 
-(defn digit
-  [value position]
-  (nth (map #(Character/getNumericValue %1) (reverse (str value))) position 0))
+(defn jump
+  [computer condition]
+  (let [[opcode parameter1 parameter2] (:program computer)
+        value1 (if (immediate? opcode 2)
+                 parameter1
+                 ((:memory computer) parameter1))]
+    (println value1)
+    (if (condition value1)
+      (let [value2 (if (immediate? opcode 3)
+                 parameter2
+                 ((:memory computer) parameter2))
+            updated-pointer (+ value2 (:pointer computer))]
+        (println value2)
+        (merge computer
+               {:program (drop updated-pointer (:memory computer))
+                :pointer updated-pointer}))
+      computer)))
 
 (defn instruction?
   [instruction-type opcode]
@@ -86,6 +99,27 @@
 
 (defn output? [opcode] (instruction? 4 opcode))
 
+(defn jump-if-true? [opcode] (instruction? 5 opcode))
+
+(defn jump-if-false? [opcode] (instruction? 6 opcode))
+
+(defn less-than? [opcode] (instruction? 7 opcode))
+
+(defn equals? [opcode] (instruction? 8 opcode))
+
+(defn continuing-instruction?
+  [[opcode]]
+  (println "checking" opcode)
+  (or (adder? opcode)
+      (multipler? opcode)
+      (input? opcode)
+      (output? opcode)
+      (jump-if-true? opcode)
+      ;(jump-if-false? opcode)
+      ;(less-than? opcode)
+      ;(equals? opcode)
+      ))
+
 (defn run-instruction
   [computer value]
   (let [[opcode] (:program computer)]
@@ -95,19 +129,22 @@
         (adder? opcode) (do-maths computer +)
         (multipler? opcode) (do-maths computer *)
         (input? opcode) (input computer value)
-        (output? opcode) (output computer value)))))
+        (output? opcode) (output computer value)
+        (jump-if-true? opcode) (jump computer #(not= 0 %1))))))
 
 (defn run
   [program value]
-  (loop [data {:program program :pointer 0 :memory program :output []}]
+  (loop [data {:program program :pointer 0 :memory program :output []}
+         times 6]
     (println)
     (println "program" (take 4 (:program data)))
     (println "memory" (:memory data))
-    (if (not (continuing-instruction? (:program data)))
+    (println "value" value)
+    (if (or (= 0 times) (not (continuing-instruction? (:program data))))
       data
       (let [iter (run-instruction data value)]
         (println (:output iter))
-        (recur iter)))))
+        (recur iter (dec times))))))
 
 (defn intcode
   ([value file-name]
@@ -123,7 +160,12 @@
     (println result)
     (= 466644 (first result))))
 
-(defn works-as-new
+(defn aircon
   []
   (let [result (intcode 1 "resources/puzzle-5")]
+    (:output result)))
+
+(defn thermal-radiator
+  []
+  (let [result (intcode 5 "resources/puzzle-5")]
     (:output result)))
